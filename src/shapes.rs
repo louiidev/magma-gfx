@@ -1,51 +1,80 @@
-use cgmath::Vector2;
-use crate::core::{Renderer, Color, RenderItem, Vertex};
+
+use crate::core::{Renderer, Color, Vertex2DColor};
+use crate::camera::get_projection_matrix;
 use std::sync::Arc;
 use vulkano::pipeline::GraphicsPipeline;
 use vulkano::framebuffer::Subpass;
 use vulkano::buffer::{ CpuAccessibleBuffer, BufferUsage };
+use vulkano::descriptor::descriptor_set::{PersistentDescriptorSetImg, PersistentDescriptorSet, PersistentDescriptorSetSampler, FixedSizeDescriptorSetsPool};
+use nalgebra_glm::{
+    Vec2,
+    Mat4
+};
 
 pub struct Rectangle {
-    pub position: Vector2<f32>,
+    pub position: Vec2,
     pub width: i32,
     pub height: i32
 }
 
+static mut ran: bool = false;
 impl Renderer {
     pub fn rectangle(&mut self, rectangle: &Rectangle, color: Color) {
         if !self.pipelines.contains_key("rect") {
             init_rect(self);
         }
         let format_color = color.normalise();
-        self.render_queue.push(RenderItem {
-            ty: "rect".to_string(),
-            vertex_buffer: CpuAccessibleBuffer::<[Vertex]>::from_iter(
-                self.device.clone(),
-                BufferUsage::all(),
-                false,
-                [
-                    Vertex {
-                        position: [-0.5, -0.5],
-                        color: format_color,
-                    },
-                    Vertex {
-                        position: [-0.5, 0.5],
-                        color: format_color,
-                    },
-                    Vertex {
-                        position: [0.5, -0.5],
-                        color: format_color,
-                    },
-                    Vertex {
-                        position: [0.5, 0.5],
-                        color: format_color,
-                    },
-                ]
-                .iter()
-                .cloned(),
-            )
-            .unwrap()
-        })
+        let vertex_buffer = CpuAccessibleBuffer::<[Vertex2DColor]>::from_iter(
+            self.device.clone(),
+            BufferUsage::all(),
+            false,
+            [
+                Vertex2DColor {
+                    position: [-0.5, -0.5],
+                    color: format_color,
+                },
+                Vertex2DColor {
+                    position: [-0.5, 0.5],
+                    color: format_color,
+                },
+                Vertex2DColor {
+                    position: [0.5, -0.5],
+                    color: format_color,
+                },
+                Vertex2DColor {
+                    position: [0.5, 0.5],
+                    color: format_color,
+                },
+            ]
+            .iter()
+            .cloned(),
+        ).unwrap();
+
+
+
+        let ubuf = CpuAccessibleBuffer::from_data(self.device.clone(), BufferUsage::uniform_buffer(), true, {
+            // note: this teapot was meant for OpenGL where the origin is at the lower left
+            //       instead the origin is at the upper left in Vulkan, so we reverse the Y axis
+            let dimensions: [f32; 2] = self.dynamic_state.viewports.as_ref().unwrap().get(0).unwrap().dimensions;
+            //  let aspect_ratio = dimensions[0] / dimensions[1];
+            
+            let mvp = get_projection_matrix(rectangle.width as f32, rectangle.height as f32, rectangle.position, dimensions);
+            
+            rec_vs::ty::Data {
+               mvp: mvp.into(),
+            }
+        }).unwrap();
+        let pipeline = self.pipelines.get("rect").unwrap();
+        let p = pipeline.clone();
+        let layout = p.descriptor_set_layout(0).unwrap();
+        let set = Arc::new(PersistentDescriptorSet::start(layout.clone())
+            .add_buffer(ubuf).unwrap()
+            .build().unwrap()
+        );
+        
+        let cmb = self.command_buffer_builder.take().unwrap();
+        let res = cmb.draw(pipeline.clone(), &self.dynamic_state, vec!(vertex_buffer), set, ());
+        self.command_buffer_builder = Some(res.unwrap());
     }
 }
 
@@ -62,12 +91,17 @@ mod rec_vs {
 
             layout(location = 0) out vec4 fragColor;
 
+            layout(set = 0, binding = 0) uniform Data {
+                uniform mat4 mvp;
+            } uniforms;
+
             out gl_PerVertex {
                 vec4 gl_Position;
             };
 
+
             void main() {
-                gl_Position = vec4(position, 0.0, 1.0);
+                gl_Position = uniforms.mvp * vec4(position, 0.0, 1.0);
                 fragColor = color;
             }
         "
@@ -95,9 +129,10 @@ mod rec_fs {
 pub fn init_rect(draw: &mut Renderer) {
     let vs = rec_vs::Shader::load(draw.device.clone()).unwrap();
     let fs = rec_fs::Shader::load(draw.device.clone()).unwrap();
+    println!("fires square");
     let pipeline = GraphicsPipeline::start()
     // Defines what kind of vertex input is expected.
-    .vertex_input_single_buffer::<crate::core::Vertex>()
+    .vertex_input_single_buffer::<crate::core::Vertex2DColor>()
     // The vertex shader.
     .vertex_shader(vs.main_entry_point(), ())
     .triangle_strip()
@@ -112,9 +147,7 @@ pub fn init_rect(draw: &mut Renderer) {
     .build(draw.device.clone())
     .unwrap();
 
-    pipeline = pipeline.vertex_shader().build();
-
-    
+    println!("fires square");
     
     draw.pipelines.insert("rect".to_string(), Arc::new(pipeline));
 }
