@@ -1,34 +1,38 @@
-use nalgebra_glm::{Mat4, Vec2, Vec3};
+// use nalgebra_glm::{Mat4, Vec2, Vec3};
+use glam::{mat4, vec3, vec4, Mat4, Quat, Vec2, Vec3, Vec4};
 
 
-pub fn get_projection_matrix(width: f32, height: f32, position: Vec2, dimensions: [f32; 2]) -> Mat4 {
-    //let projection = nalgebra_glm::ortho(0.0, 1200., 800., 0.0, -1.0, 100.0);
-    let proj = nalgebra_glm::ortho_zo(0.0, 1200., 800., 0.0, -1.0, 100.0);
-    let camera_pos = nalgebra_glm::vec3(0.0, 0.0, 3.0);
-    let camera_front = nalgebra_glm::vec3(0.0, 0.0, -1.0);
-    let view = nalgebra_glm::look_at_rh(
-        &camera_pos, // Camera is at (4,3,3), in World Space
-        &(camera_pos + camera_front), // and looks at the origin
-        &nalgebra_glm::Vec3::new(0.0,1.0,0.0)  // Head is up (set to 0,-1,0 to look upside-down)
+pub fn ortho_matrix_vulk(left: f32, right: f32 , bottom: f32, top: f32, z_near: f32, z_far: f32 ) -> Mat4 {
+    let a = 2.0 / (right - left);
+    let b = 2.0 / (bottom - top);
+    let c = 1. / (z_near - z_far);
+
+    let tx = -(right + left) / (right - left);
+    let ty = -(bottom + top) / (bottom - top);
+    let tz = z_near / (z_near - z_far);
+
+    Mat4::from_cols(
+        Vec4::new(a, 0.0, 0.0, 0.),
+        Vec4::new(0.0, b, 0.0, 0.),
+        Vec4::new(0.0, 0.0, c, 0.),
+        Vec4::new(tx, ty, tz, 1.0),
+    )
+}
+
+pub fn get_projection_matrix(size: Vec2, position: Vec2, dimensions: [f32; 2]) -> Mat4 {
+    let proj = ortho_matrix_vulk(0.0, *dimensions.get(0).unwrap(), *dimensions.get(1).unwrap(), 0.0, -1.0, 1.0);
+    let camera_pos = vec3(0.0, 0.0, 3.0);
+    let camera_front = vec3(0.0, 0.0, -1.0);
+    let view = Mat4::look_at_lh(
+        camera_pos, // Camera is at (4,3,3), in World Space
+        camera_pos + camera_front, // and looks at the origin
+        Vec3::new(0.0,-1.0,0.0)  // Head is up (set to 0,-1,0 to look upside-down)
     );
-    let mut model = Mat4::identity();
-    let pos = Vec3::new(position.x + (width / 2.), position.y + (height / 2.), 0.);
-    model =
-        nalgebra_glm::translate(&model, &pos);
+    let model = Mat4::from_scale_rotation_translation(Vec3::new(size.x(), size.y(), 1.0), Quat::identity(), Vec3::new(position.x(), position.y(), 1.0));
 
-    model = nalgebra_glm::translate(
-        &model,
-        &nalgebra_glm::vec3(0.5 * width, 0.5 * height, 0.0),
-    );
-    model = nalgebra_glm::rotate(&model, 0.0, &nalgebra_glm::vec3(0.0, 0.0, 1.0));
-    model = nalgebra_glm::translate(
-        &model,
-        &nalgebra_glm::vec3(-0.5 * width, -0.5 * height, 0.0),
-    );
-
-    model = nalgebra_glm::scale(&model, &nalgebra_glm::vec3(width, height, 1.0));
-
-    proj * model * view
+    let mut correction = Mat4::identity();
+    
+    proj * model
 }
 
 
@@ -42,16 +46,16 @@ pub struct Camera {
 impl Camera {
 
     pub fn get_view(&self) -> Mat4 {
-        nalgebra_glm::look_at(&self.position, &self.target, &self.up)
+        Mat4::look_at_lh(self.position, self.target, self.up)
     }
 
     pub fn default() -> Self {
         
         let position = Vec3::new(0.0,0.0, 3.0);
         let target = Vec3::new(0.0, 0.0, 0.0);
-        let direction = nalgebra_glm::normalize(&(position - target));
-        let right = nalgebra_glm::normalize(&nalgebra_glm::cross(&nalgebra_glm::vec3(0.0, 1.0, 0.0), &direction));
-        let up = nalgebra_glm::cross(&direction, &right);
+        let direction = Vec3::normalize(position - target);
+        let right = Vec3::normalize(Vec3::cross(Vec3::new(0.0, 1.0, 0.0), direction));
+        let up = Vec3::cross(direction, right);
         
         Camera {
             position,

@@ -6,10 +6,7 @@ use vulkano::pipeline::GraphicsPipeline;
 use vulkano::framebuffer::Subpass;
 use vulkano::buffer::{ CpuAccessibleBuffer, BufferUsage };
 use vulkano::descriptor::descriptor_set::{PersistentDescriptorSetImg, PersistentDescriptorSet, PersistentDescriptorSetSampler, FixedSizeDescriptorSetsPool};
-use nalgebra_glm::{
-    Vec2,
-    Mat4
-};
+use glam::{mat4, vec3, vec4, Mat4, Quat, Vec2, Vec3, Vec4};
 
 pub struct Rectangle {
     pub position: Vec2,
@@ -58,10 +55,9 @@ impl Renderer {
             let dimensions: [f32; 2] = self.dynamic_state.viewports.as_ref().unwrap().get(0).unwrap().dimensions;
             //  let aspect_ratio = dimensions[0] / dimensions[1];
             
-            let mvp = get_projection_matrix(rectangle.width as f32, rectangle.height as f32, rectangle.position, dimensions);
-            
+            let mvp = get_projection_matrix(Vec2::new(rectangle.width as f32, rectangle.height as f32), rectangle.position, dimensions);
             rec_vs::ty::Data {
-               mvp: mvp.into(),
+               mvp: [mvp.x_axis().into(), mvp.y_axis().into(), mvp.z_axis().into(), mvp.w_axis().into()],
             }
         }).unwrap();
         let pipeline = self.pipelines.get("rect").unwrap();
@@ -101,7 +97,7 @@ mod rec_vs {
 
 
             void main() {
-                gl_Position = uniforms.mvp * vec4(position, 0.0, 1.0);
+                gl_Position = uniforms.mvp * vec4(position.xy, 0.0, 1.0);
                 fragColor = color;
             }
         "

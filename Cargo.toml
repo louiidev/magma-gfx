@@ -13,6 +13,7 @@ vulkano-win = "0.18.0"
 vulkano-shaders = "0.18.0"
 spin_sleep = "0.3.7"
 image = "0.23.3"
+glam = "0.9.3"
 
 
 [dependencies.nalgebra-glm]

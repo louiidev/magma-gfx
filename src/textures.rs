@@ -6,6 +6,7 @@ use vulkano::pipeline::{
     GraphicsPipelineAbstract
 };
 
+
 use vulkano::framebuffer::Subpass;
 use vulkano::buffer::{ CpuAccessibleBuffer, BufferUsage };
 use vulkano::image::ImmutableImage;
@@ -16,7 +17,7 @@ use vulkano::descriptor::descriptor_set::{PersistentDescriptorSetImg, Persistent
 use vulkano::sampler::{Sampler, SamplerAddressMode, Filter, MipmapMode};
 use vulkano::buffer::cpu_pool::CpuBufferPool;
 
-use nalgebra_glm::Vec2;
+use glam::{mat4, vec3, vec4, Mat4, Quat, Vec2, Vec3, Vec4};
 
 pub struct Texture2D {
     pub width: i32,
@@ -56,7 +57,7 @@ impl Texture2D {
         let dimensions = loaded_image.dimensions();
         let image = loaded_image.to_rgba().to_vec();
         
-        let (texture, tex_future) = {
+        let (texture, _tex_future) = {
             ImmutableImage::from_iter(
                 image.iter().cloned(),
                 Dimensions::Dim2d { width: dimensions.0, height: dimensions.1 },
@@ -72,7 +73,7 @@ impl Texture2D {
         SamplerAddressMode::Repeat, 0.0, 1.0, 0.0, 0.0).unwrap();
         
         let layout = pipeline.layout().descriptor_set_layout(0).unwrap();
-        let mut pool = FixedSizeDescriptorSetsPool::new(layout.clone());
+        let pool = FixedSizeDescriptorSetsPool::new(layout.clone());
 
         gfx.renderer.pipelines.insert("texture".to_string(), Arc::new(pipeline));
        
@@ -122,10 +123,10 @@ impl Renderer {
         // note: this teapot was meant for OpenGL where the origin is at the lower left
         //       instead the origin is at the upper left in Vulkan, so we reverse the Y axis
         let dimensions: [f32; 2] = self.dynamic_state.viewports.as_ref().unwrap().get(0).unwrap().dimensions;
-        let projection = get_projection_matrix(texture.width as f32 * scale, texture.height as f32 * scale, position, dimensions);
+        let projection = get_projection_matrix(Vec2::new(texture.width as f32 * scale, texture.height as f32 * scale), position, dimensions);
         
         let uniform_data = texture_vs::ty::Data {
-            projection: projection.into()
+            projection: [projection.x_axis().into(), projection.y_axis().into(), projection.z_axis().into(), projection.w_axis().into()]
         };
         
         texture.ubuf.next(uniform_data).unwrap()
